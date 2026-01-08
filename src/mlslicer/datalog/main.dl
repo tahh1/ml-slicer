@@ -1,0 +1,1438 @@
+// ---- type definitions ----
+.type Var <: symbol
+.type Type <: symbol
+.type Field <: symbol
+.type Index <: Var
+.type Invocation <: symbol
+.type Method <: symbol
+.type Value <: symbol
+.type Context = [invo1:Invocation, invo2:Invocation]
+.type HContext = [invo:Invocation]
+
+#define ValueIdMacro(id, type) \
+    cat(cat(cat(id, "::: "), type), "::: ")
+
+#define MakeVarCtx(var, ctx) \
+    cat(cat(cat(cat("(", var), ", "), ctx), ")")
+
+#define MakeCtx(ctx1, ctx2) \
+    cat(cat(cat(cat("[", ctx1), ", "), ctx2), "]")
+
+#define MakePath(ele, path) \
+    cat(cat(cat(cat("[", ele), ", "), path), "]")
+
+// ---- inputs ----
+// inner-procedural facts
+.decl AssignVar(to:Var, from:Var, lineno:number)
+.decl AssignGlobal(to:Var, from:Var, lineno:number)
+.decl AssignStrConstant(to:Var, constant:symbol,lineno:number)
+.decl AssignBoolConstant(to:Var, constant:symbol,lineno:number)
+.decl AssignIntConstant(to:Var, constant:symbol,lineno:number)
+.decl AssignFloatConstant(to:Var, constant:symbol,lineno:number)
+.decl AssignBinOp(to:Var, left:Var, op:symbol, right:Var, lineno:number)
+.decl LoadField(to:Var, base:Var, f:Field, lineno: number)
+.decl LoadIndex(to:Var, base:Var, i:Index,line:number)
+.decl StoreIndex(base:Var, i:Index, from:Var,lineno:number)
+.decl LoadSlice(to:Var, base:Var, st:Var, ed:Var, step:Var,lineno:number)
+.decl StoreSlice(base:Var, st:Var, ed:Var, step:Var, from:Var, lineno:number)
+.decl StoreFieldSSA(new_base:Var, base:Var, f:Field, from:Var, lineno:number)
+.decl StoreIndexSSA(new_base:Var, base:Var, i:Index, from:Var, line:number)
+.decl StoreSliceSSA(new_base:Var, base:Var, st:Var, ed:Var, step:Var, from:Var,lineno:number)
+
+
+// ADDED TO IMPROVE COVERAGE (Both data and Control Flow)
+.decl LoadSliceMultiDim(to:Var, base:Var, index_position:number,index_value:Index,dimension:number,line:number)
+.decl StoreSliceMultiDim(to:Var, base:Var, index_position:number,index_value:Index,dimension:number,line:number)
+.decl VarContext(var:Var, ctxt:Context)
+.decl AssignUnaryOp(var:Var,op:symbol,operand:symbol,line:number)
+.decl For(id:Var,start:number,end:number,iter:Var)
+.decl While(id:Var,start:number,end:number,test:Var)
+.decl If(id:Var,start:number,end:number,test:Var)
+.decl OrElse(id:Var,start:number,end:number)
+.decl MethodReturn(method:Method,var:Var,line:number)
+.decl With(start:number,end:number)
+.decl InvokeInjected(invo:Invocation, toMeth:Method, inMeth:Method)
+
+
+// inter-procedural facts
+.decl Invoke(invo:Invocation, toMeth:Method, inMeth:Method)
+.decl InvokeLineno(invo:Invocation, lineno:number)
+.decl ActualParam(index:number, invo:Invocation, var:Var)
+.decl FormalParam(index:number, meth:Method, var:Var)
+.decl ActualKeyParam(keyword:Var, invo:Invocation, var:Var)
+.decl ActualReturn(index:number, invo:Invocation, var:Var)
+.decl FormalReturn(index:number, meth:Method, var:Var)
+
+.decl VarInMethod(var:Var, meth:Method)
+.decl VarType(var:Var, type:Type)
+.decl SubType(subtype:Type, type:Type)
+.decl Alloc(var:Var, value:Value, inMeth:Method)
+.decl LocalMethod(meth:Method,start_lineno:number,end_lineno:number,isreturn:symbol)
+.decl LocalClass(cls:symbol,start:number,end:number)
+.decl InvokeInLoop(invo:Invocation, loop_var:Var)
+.decl NextInvoke(invo1:Invocation, invo2:Invocation)
+.input AssignUnaryOp
+.input AssignVar
+.input AssignGlobal
+.input AssignStrConstant
+.input AssignBoolConstant
+.input AssignIntConstant
+.input AssignFloatConstant
+.input AssignBinOp
+.input LoadField
+.input LoadIndex
+.input StoreIndex
+.input LoadSlice
+.input StoreSlice
+.input StoreIndexSSA
+.input StoreFieldSSA
+.input StoreSliceSSA
+.input While
+.input For
+.input If
+.input OrElse
+.input MethodReturn
+
+.input Invoke
+.input InvokeLineno
+.input ActualParam
+.input FormalParam
+.input ActualKeyParam
+.input ActualReturn
+.input FormalReturn
+.input VarInMethod
+.input VarType
+.input SubType
+.input Alloc
+.input LocalMethod
+.input LocalClass
+.input InvokeInLoop
+.input NextInvoke
+.input InvokeInjected
+.input LoadSliceMultiDim
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* -------------------
+Method specifications
+------------------- */
+.decl FilteredMethod(meth:Method)
+.decl PureMethod(meth:Method)
+FilteredMethod(meth) :-
+    meth = "__phi__"; meth = "set_field_wrapper";
+    meth = "set_index_wrapper"; meth = "set_slice_wrapper".
+
+PureMethod(meth) :-
+    meth = "len".
+
+
+/* -------------------
+Locations for train/val/test data
+------------------- */
+.decl TrainingData(method:Method, model_idx:number, data_index:number)
+.decl TestData(method:Method, model_idx:number, data_index:number)
+.decl ValData(method:Method, model_idx:number, data_index:number)
+.decl ScoredData(method:Method, model_idx:number, data_index:number)
+.decl ScoredResult(method:Method, result_index:number)
+.decl FilteredTrainingMethod(method:Method)
+// return index
+TrainingData(meth, 0, 1) :-
+    Invoke(_, meth, _),
+    match(".*[.](fit|fit_generator)", meth).
+
+
+
+TestData(meth, 0, 1) :-
+    Invoke(_, meth, _),
+    match(".*[.](predict|score|evaluate|predict_proba)", meth).
+
+ValData(meth, 0, 1) :-
+    Invoke(_, meth, _),
+    match(".*(GridSearchCV|HalvingGridSearchCV|ParameterGrid|ParameterSampler|RandomizedSearchCV|HalvingRandomSearchCV)[.]fit", meth).
+ValData(meth, 0, 8) :-
+    Invoke(_, meth, _),
+    match(".*[.](fit)", meth).
+
+	
+ValData(meth, 0, 6) :-
+    Invoke(_, meth, _),
+    match(".*[.](fit_generator)", meth).
+
+ScoredData(meth, 0, 1) :-
+    Invoke(_, meth, _),
+    match(".*[.](score|evaluate|auc|calinski_harabasz_score|davies_bouldin_score|silhouette_score|silhouette_samples)", meth).
+ScoredData(meth, 1, 2) :-
+    Invoke(_, meth, _),
+    match(".*[.](plot_confusion_matrix|plot_det_curve|plot_precision_recall_curve|plot_roc_curve)", meth).
+ScoredResult(meth, 2) :-
+    Invoke(_, meth, _),
+    match(".*(accuracy_score|average_precision_score|balanced_accuracy_score|brier_score_loss|classification_report|cohen_kappa_score|confusion_matrix|dcg_score|det_curve|f1_score|fbeta_score|hamming_loss|hinge_loss|jaccard_score|log_loss|matthews_corrcoef|multilabel_confusion_matrix|ndcg_score|precision_recall_curve|precision_recall_fscore_support|precision_score|recall_score|roc_auc_score|roc_curve|top_k_accuracy_score|zero_one_loss|explained_variance_score|max_error|mean_absolute_error|mean_squared_error|mean_squared_log_error|median_absolute_error|mean_absolute_percentage_error|r2_score|mean_poisson_deviance|mean_gamma_deviance|mean_tweedie_deviance|d2_tweedie_score|mean_pinball_loss|coverage_error|label_ranking_average_precision_score|label_ranking_loss|adjusted_mutual_info_score|adjusted_rand_score|completeness_score|contingency_matrix|pair_confusion_matrix|fowlkes_mallows_score|homogeneity_completeness_v_measure|homogeneity_score|mutual_info_score|normalized_mutual_info_score|rand_score|v_measure_score)", meth).
+// known pre-processing/clustering methods not for training a classification model
+// [Problem!!] Unknown custom methods may also be pre-processing
+FilteredTrainingMethod(meth) :-
+    Invoke(_, meth, _),
+    (match("(GenericUnivariateSelect|SelectPercentile|SelectKBest|SelectFpr|SelectFdr|SelectFromModel|SelectFwe|SequentialFeatureSelector|RFE|RFECV|VarianceThreshold)[.]fit", meth);
+    match("(CountVectorizer|HashingVectorizer|TfidfTransformer|TfidfVectorizer|PCA)[.]fit", meth);
+    match("(Imputer|SimpleImputer|IterativeImputer|KNNImputer)[.]fit", meth);
+    match("(FunctionTransformer|KBinsDiscretizer|KernelCenterer|LabelBinarizer|LabelEncoder|MultiLabelBinarizer|MaxAbsScaler|MinMaxScaler|Normalizer|OneHotEncoder|OrdinalEncoder|PolynomialFeatures|PowerTransformer|QuantileTransformer|RobustScaler|SplineTransformer|StandardScaler)[.]fit", meth);
+    match("(AffinityPropagation|AgglomerativeClustering|Birch|DBSCAN|FeatureAgglomeration|KMeans|MiniBatchKMeans|MeanShift|OPTICS|SpectralClustering|SpectralBiclustering|SpectralCoclustering)[.]fit", meth)).
+
+// ---- Type Info ----
+.decl IsDataFrame(var:Var)
+.decl IsDataFrameEquivIndexing(var:Var)
+
+IsDataFrame(var) :-
+    VarType(var, varType),
+    match(".*(DataFrame|FrameOrSeries|_LocIndexer)", varType).
+IsDataFrameEquivIndexing(idx) :-
+    VarType(idx, "str"); VarType(idx, "list[str]"); VarType(idx, "list").
+
+// ---- Constant Propagation ----
+.decl ConstantValue(var:Var, constant:symbol)
+.decl VarEquals(var1:Var, var2:Var)
+
+ConstantValue(var, constant) :-
+    AssignBoolConstant(var, constant,_);
+    AssignStrConstant(var, constant,_);
+    AssignIntConstant(var, constant,_);
+    AssignFloatConstant(var, constant,_).
+
+FLowVarTransformation(var,ctxt,line,"",ctxt,"Instr AssignBoolConstant","",0,0):-
+    AssignBoolConstant(var, constant,line),
+    VarContext(var,ctxt),
+    !InsensitiveContext(ctxt).
+
+FLowVarTransformation(var,ctxt,line,"",ctxt,"Instr AssignStrConstant","",0,0):-
+    AssignStrConstant(var, constant,line),
+    VarContext(var,ctxt),
+    !InsensitiveContext(ctxt).
+
+FLowVarTransformation(var,ctxt,line,"",ctxt,"Instr AssignIntConstant","",0,0):-
+    AssignIntConstant(var, constant,line),
+    VarContext(var,ctxt),
+    !InsensitiveContext(ctxt).
+
+FLowVarTransformation(var,ctxt,line,"",ctxt,"Instr AssignFloatConstant","",0,0):-
+    AssignFloatConstant(var, constant,line),
+    VarContext(var,ctxt),
+    !InsensitiveContext(ctxt).
+
+
+// ---- Common Expression Detection ----
+VarEquals(var1, var2) :- // same constant values
+    ConstantValue(var1, constant),
+    ConstantValue(var2, constant).
+
+VarEquals(var, var) :-  // reflexive
+    VarPointsTo(var, _, _, _).
+
+VarEquals(var1, var2) :- // symmetric
+    VarEquals(var2, var1).
+
+VarEquals(var1, var3) :- // transitive
+    VarEquals(var1, var2),
+    VarEquals(var2, var3).
+
+VarEquals(var1, var2) :- // passing values
+    AssignVar(var1, var2,_); AssignGlobal(var1, var2,_); InterProcAssign(var1, _, var2, _,_).
+
+VarEquals(var1, var2) :-  // b==c => b[n] c[n] 
+    (LoadField(var1, base1, fld,_), LoadField(var2, base2, fld,_);
+    LoadIndex(var1, base1, i1,_), LoadIndex(var2, base2, i2,_), (i1 = i2; VarEquals(i1, i2))),
+    VarEquals(base1, base2).
+
+// add LoadSlice case [TODO]
+
+VarEquals(var1, var2) :-  // a==b => len(a) == len(b)
+    CallGraphEdge(invo1, _, meth, _), ActualParam(1, invo1, param1), ActualReturn(0, invo1, var1),
+    CallGraphEdge(invo2, _, meth, _), ActualParam(1, invo2, param2), ActualReturn(0, invo2, var2),
+    PureMethod(meth),
+    VarEquals(param1, param2).
+
+// ---- call-graph construction ----
+.decl CallGraphEdge(invo:Invocation, callerCtx:Context, meth:Method, calleeCtx:Context)
+.decl ArityMatch(invo:Invocation, callerCtx:Context, meth:Method, calleeCtx:Context)
+.decl Reachable(meth:Method, ctx:Context)
+.decl InsensitiveContext(Ctx:Context)
+
+InsensitiveContext(calleeCtx):-    
+	CallGraphEdge(from_invo, callerCtx, toMeth, calleeCtx),
+	callerCtx=[invo1,invo2],
+	calleeCtx=[invo2,invo3],
+	!FilteredMethod(toMeth),
+	invo1!="",
+	invo3!="$invo0",
+	invo3!="$invo1".
+
+
+Reachable(toMeth, calleeCtx),
+CallGraphEdge(invo, callerCtx, toMeth, calleeCtx) :-
+    (Invoke(invo, toMeth, inMeth);InvokeInjected(invo,toMeth,inMeth)),
+    Reachable(inMeth, callerCtx),
+    callerCtx = [invo1, invo2],
+    calleeCtx = [invo2, invo].
+
+Reachable("", ["", ""]). // entry point
+
+// [TODO] invoke graph
+.decl InvokeEdge(to_invo:Invocation, to_ctx:Context, from_invo:Invocation, from_ctx:Context)
+.decl InvokePath(to_invo:Invocation, to_ctx:Context, from_invo:Invocation, from_ctx:Context)
+InvokeEdge(to_invo, ctx, from_invo, ctx) :-
+    NextInvoke(from_invo, to_invo),
+    CallGraphEdge(from_invo, ctx, _, _),
+    CallGraphEdge(to_invo, ctx, _, _).
+
+InvokeEdge(to_invo, calleeCtx, from_invo, callerCtx) :-
+    CallGraphEdge(from_invo, callerCtx, toMeth, calleeCtx),
+    (Invoke(to_invo, _, toMeth);InvokeInjected(to_invo, _, toMeth)),
+    CallGraphEdge(to_invo, calleeCtx, _, _),
+    !NextInvoke(_, to_invo).
+  
+  
+
+
+InvokeEdge(to_invo, callerCtx, from_invo, calleeCtx) :-
+    InvokeEdge(to_invo, callerCtx, mid_invo, callerCtx),
+    CallGraphEdge(mid_invo, callerCtx, toMeth, calleeCtx),
+    Invoke(from_invo, _, toMeth),
+    NextInvoke(from_invo, "invo_end").
+
+InvokePath(to_invo, to_ctx, from_invo, from_ctx) :-
+    InvokeEdge(to_invo, to_ctx, from_invo, from_ctx).
+
+InvokePath(to_invo, to_ctx, from_invo, from_ctx) :-
+    InvokeEdge(to_invo, to_ctx, mid_invo, mid_ctx),
+    InvokePath(mid_invo, mid_ctx, from_invo, from_ctx).
+
+
+/* -------------------
+    Pointer analysis
+------------------- */
+
+.decl VarPointsTo(var:Var, ctx:Context, value:Value, hctx:HContext)
+.decl IndexContentPointsTo(baseValue:Value, baseHctx:HContext, value:Value, hctx:HContext) // always insensitive
+.decl FieldPointsTo(base:Value, baseHctx:HContext, field:Field, value:Value, hctx:HContext)
+.decl InterProcAssign(to:Var, calleeCtx:Context, from:Var, callerCtx:Context, lineno:number)
+.decl SliceIndex(st:Var, ed:Var, step:Var, index:Index)
+
+// base case VarContext
+VarContext(var,ctx):-
+	VarInMethod(var,meth),
+	Reachable(meth,ctx).
+
+
+
+// base case
+VarPointsTo(var, ctx, value, hctx) :- 
+    Alloc(var, value, inMeth),
+    Reachable(inMeth, ctx),
+    ctx = [invo1, invo2],
+    hctx = [invo2].
+
+// local assignment
+VarPointsTo(to, ctx, value, hctx) :- 
+    AssignVar(to, from,_),
+    VarPointsTo(from, ctx, value, hctx). 
+
+// assignment from/to global
+VarPointsTo(to, meth_ctx, value, hctx) :- 
+    AssignGlobal(to, from,_),
+    VarInMethod(to, meth),
+    Reachable(meth, meth_ctx),
+    VarPointsTo(from, _, value, hctx).
+
+// load/store fields
+// the analysis is field-insensitive for unknown fields 
+// currently the insensitive part always applies [TODO]
+VarPointsTo(to, ctx, value, hctx) :- 
+    LoadField(to, base, _,_),
+    VarPointsTo(base, ctx, value, hctx).
+VarPointsTo(to, ctx, value, hctx) :- 
+    LoadField(to, base, fld,_),
+    VarPointsTo(base, ctx, baseValue, baseHctx),
+    FieldPointsTo(baseValue, baseHctx, fld, value, hctx).
+
+FieldPointsTo(baseValue, baseHctx, fld, value, hctx) :-
+    StoreFieldSSA(_, base, fld, from,_),
+    VarPointsTo(base, ctx, baseValue, baseHctx),
+    VarPointsTo(from, ctx, value, hctx).
+
+// load/store indexes
+// the base objects could be list/tuple/dict/Series/DataFrame (any type that implements _getitem__ method)
+// the semantics depends on specific implementations, e.g., indexing DataFrame may return a copy or a view of the original object
+VarPointsTo(to, ctx, value, hctx) :- 
+    LoadIndex(to, base, _,_),
+    VarPointsTo(base, ctx, value, hctx).
+
+VarPointsTo(to, ctx, value, hctx) :- 
+    LoadIndex(to, base, _,_),
+    VarPointsTo(base, ctx, baseValue, baseHctx),
+    IndexContentPointsTo(baseValue, baseHctx, value, hctx).
+
+IndexContentPointsTo(baseValue, baseHctx, value, hctx) :- 
+    StoreIndex(base, _, from,_),
+    VarPointsTo(base, ctx, baseValue, baseHctx),
+    VarPointsTo(from, ctx, value, hctx).
+IndexContentPointsTo(baseValue, baseHctx, value, hctx) :- 
+    StoreIndexSSA(_, base, _, from,_),
+    VarPointsTo(base, ctx, baseValue, baseHctx),
+    VarPointsTo(from, ctx, value, hctx).
+
+// load/store slices
+SliceIndex(st, ed, step, index) :-
+    LoadSlice(_, _, st, ed, step,_),
+    index = ValueIdMacro(ValueIdMacro(st, ed), step).
+SliceIndex(st, ed, step, index) :-
+    (StoreSlice(_, st, ed, step, _,_); StoreSliceSSA(_, _, st, ed, step, _,_)),
+    index = ValueIdMacro(ValueIdMacro(st, ed), step).
+// slices are shallow copies; the contents point to the same objects
+IndexContentPointsTo(toValue, toHctx, value, hctx) :- 
+    LoadSlice(to, from, st, ed, step,_),
+    SliceIndex(st, ed, step, _),
+    VarPointsTo(to, ctx, toValue, toHctx),
+    VarPointsTo(from, ctx, fromValue, fromHctx),
+    IndexContentPointsTo(fromValue, fromHctx, value, hctx). 
+
+VarPointsTo(base, ctx, value, hctx) :- 
+    (StoreSlice(base, _, _, _, from,_); StoreSliceSSA(_, base, _, _, _, from,_)),
+    VarPointsTo(from, ctx, value, hctx).  
+
+// extra cases for SSA
+VarPointsTo(new_base, ctx, baseValue, hctx) :- 
+    (StoreIndexSSA(new_base, base, _, _,_); StoreFieldSSA(new_base, base, _, _,_); StoreSliceSSA(new_base, base, _, _, _, _,_)),
+    VarPointsTo(base, ctx, baseValue, hctx).
+
+
+// arity checking:
+ArityMatch(invo, callerCtx, meth, calleeCtx) :-
+    CallGraphEdge(invo, callerCtx, meth, calleeCtx),
+    !FilteredMethod(meth),
+    c1 = count: {FormalReturn(index, meth, from)},
+    c2 = count: {ActualReturn(index, invo, to)},
+    c1 = c2.
+
+// inter-procedural cases
+InterProcAssign(to, calleeCtx, from, callerCtx,line) :-
+    CallGraphEdge(invo, callerCtx, meth, calleeCtx),
+    InvokeLineno(invo, line),
+    !FilteredMethod(meth),
+    FormalParam(index, meth, to),
+    ActualParam(index, invo, from).
+InterProcAssign(to, calleeCtx, from, callerCtx,line) :-
+    CallGraphEdge(invo, callerCtx, meth, calleeCtx),
+    InvokeLineno(invo, line),
+    !FilteredMethod(meth),
+    FormalParam(_, meth, to),
+    ActualKeyParam(to, invo, from).
+InterProcAssign(to, callerCtx, from, calleeCtx,line) :-
+    CallGraphEdge(invo, callerCtx, meth, calleeCtx),
+    InvokeLineno(invo, line),
+    ArityMatch(invo, callerCtx, meth, calleeCtx),
+    !FilteredMethod(meth),
+    FormalReturn(index, meth, from),
+    ActualReturn(index, invo, to).
+// arity mismatch: pair all pairs
+InterProcAssign(to, callerCtx, from, calleeCtx,line) :-
+    CallGraphEdge(invo, callerCtx, meth, calleeCtx),
+    InvokeLineno(invo, line),
+    !ArityMatch(invo, callerCtx, meth, calleeCtx),
+    !FilteredMethod(meth),
+    FormalReturn(_, meth, from),
+    ActualReturn(_, invo, to).
+
+VarPointsTo(to, toCtx, value, hctx) :- 
+    InterProcAssign(to, toCtx, from, fromCtx,_),
+    VarPointsTo(from, fromCtx, value, hctx).
+
+// ---- alias & access path ----
+.decl AccessFrom(to:Var, toCtx:Context, from:Var, fromCtx:Context)
+.decl Alias(to:Var, toCtx:Context, from:Var, fromCtx:Context)
+
+AccessFrom(to, toCtx, from, fromCtx) :-
+    VarPointsTo(to, toCtx, baseValue, baseHctx),
+    (FieldPointsTo(baseValue, baseHctx, fld, value, hctx); IndexContentPointsTo(baseValue, baseHctx, value, hctx)),
+    VarPointsTo(from, fromCtx, value, hctx).
+
+AccessFrom(to, toCtx, from, fromCtx) :-
+    AccessFrom(to, toCtx, mid, midCtx),
+    AccessFrom(mid, midCtx, from, fromCtx).
+
+Alias(from, fromCtx, to, toCtx),
+Alias(to, toCtx, from, fromCtx) :-
+    VarPointsTo(to, toCtx, value, hctx),
+    VarPointsTo(from, fromCtx, value, hctx).
+
+/* -------------------
+    Information flow analysis
+------------------- */
+.decl FlowFrom(to:Var, toCtx:Context, from:Var, fromCtx:Context, tag:symbol)
+.decl FlowFromEdge(to:Var, toCtx:Context, from:Var, fromCtx:Context, tag:symbol, rule_num:symbol,transformation:symbol, line:number)
+.decl FlowFromExtended(to:Var, toCtx:Context, from:Var, fromCtx:Context, tag:symbol)
+.decl FLowVarTransformation(to:Var,toCtx:Context,instr:number,from:symbol,fromCtx:Context,tag:symbol,type:symbol,InputIndex:number,ReturnIndex:number)
+.decl FLowVarStoreIndex(to:Var,toCtx:Context,instr:number,from:symbol,fromCtx:Context,tag:symbol,type:symbol,InputIndex:Var,ReturnIndex:Var)
+
+// unspecified methods: all parameters flow into return results
+
+
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","1",meth,line) :-
+	CallGraphEdge(invo, _, meth, _),
+    InvokeLineno(invo,line),
+	(ActualParam(_, invo, from); ActualKeyParam(_, invo, from)),
+	ActualReturn(_, invo, to),
+	(!LocalMethod(meth,_,_,_); meth = "__phi__"),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+
+
+
+
+// inter-procedural flows
+
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","3","InterProcAssign",line) :-
+    InterProcAssign(to, toCtx, from, fromCtx,line).
+
+/// InterProc our graph edges rules
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr InterProcAssign Var Param Input","transformation",ParamIdx,ParamIdx):-
+    InterProcAssign(to, toCtx, from, fromCtx,line),
+    InvokeLineno(invo,line),
+    CallGraphEdge(invo, _, meth, _),
+    ActualParam(ParamIdx, invo, from),
+    !TrainingData(meth, _, _),
+    !TestData(meth, _, _),
+    !ValData(meth, _, _),
+    !ScoredData(meth, _, _) ,
+    fromCtx = [invo1,invo2],
+    toCtx = [invo3,invo4],
+    ((invo1="",invo2="",invo3="",invo4!="");
+    (invo1="",invo2!="",invo3!="",invo4!="")).
+
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr InterProcAssign Var Param Input","transformation",FormalIdx,FormalIdx):-
+    InterProcAssign(to, toCtx, from, fromCtx,line),
+    InvokeLineno(invo,line),
+    CallGraphEdge(invo, _, meth, _),
+    ActualKeyParam(_, invo, from),
+    FormalParam(FormalIdx, meth, to),
+    !TrainingData(meth, _, _),
+    !TestData(meth, _, _),
+    !ValData(meth, _, _),
+    !ScoredData(meth, _, _) ,
+    fromCtx = [invo1,invo2],
+    toCtx = [invo3,invo4],
+    ((invo1="",invo2="",invo3="",invo4!="");
+    (invo1="",invo2!="",invo3!="",invo4!="")).
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr InterProcAssign Var Param Return","transformation",ReturnIdx,ReturnIdx):-
+    InterProcAssign(to, toCtx, from, fromCtx,line),
+    ActualReturn(ReturnIdx, invo, to),
+    InvokeLineno(invo,line),
+    CallGraphEdge(invo, _, meth, _),
+    !TrainingData(meth, _, _),
+    !TestData(meth, _, _),
+    !ValData(meth, _, _),
+    !ScoredData(meth, _, _) ,
+    fromCtx = [invo1,invo2],
+    toCtx = [invo3,invo4],
+    ((invo1!="",invo2!="",invo3="",invo4!="");
+    (invo1="",invo2!="",invo3="",invo4="")).
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr InterProcAssign Var Param Return","transformation",ReturnIdx,ReturnIdx):-
+    InterProcAssign(to, toCtx, from, fromCtx,_),
+    ActualReturn(ReturnIdx, invo, to),
+    CallGraphEdge(invo, _, meth, _),
+    MethodReturn(meth,from,line),
+    !TrainingData(meth, _, _),
+    !TestData(meth, _, _),
+    !ValData(meth, _, _),
+    !ScoredData(meth, _, _) ,
+    fromCtx = [invo1,invo2],
+    toCtx = [invo3,invo4],
+    ((invo1!="",invo2!="",invo3="",invo4!="");
+    (invo1="",invo2!="",invo3="",invo4="")).
+
+FLowVarTransformation(ret,retCtx,line,from,fromCtx,"Instr LocalMeth Var Param",meth,ParamIdx,ReturnIdx):-
+    InterProcAssign(to, toCtx, from, fromCtx,line),
+    InvokeLineno(invo,line),
+    Invoke(invo,meth,_),
+    ActualReturn(ReturnIdx, invo, ret),
+    ActualParam(ParamIdx, invo, from),
+    VarContext(ret, retCtx),
+    fromCtx = [invo1,invo2],
+    toCtx = [invo2,invo3],
+    Invoke(invo1,_,_),
+    Invoke(invo2,_,_),
+    fromCtx=retCtx.
+
+FLowVarTransformation(ret,retCtx,line,from,fromCtx,"Instr LocalMeth Var Param",meth,ParamIdx,ReturnIdx):-
+    InterProcAssign(to, toCtx, from, fromCtx,line),
+    InvokeLineno(invo,line),
+    Invoke(invo,meth,_),
+    ActualReturn(ReturnIdx, invo, ret),
+    ActualKeyParam(_, invo, from),
+    FormalParam(ParamIdx,meth,from),
+    VarContext(ret, retCtx),
+    fromCtx = [invo1,invo2],
+    toCtx = [invo2,invo3],
+    Invoke(invo1,_,_),
+    Invoke(invo2,_,_),
+    fromCtx=retCtx.
+
+
+FLowVarTransformation("",fromCtx,line,from,fromCtx,"Instr LocalMeth Var Param",meth,ParamIdx,0):-
+    InterProcAssign(to, toCtx, from, fromCtx,line),
+    InvokeLineno(invo,line),
+    Invoke(invo,meth,_),
+    ActualParam(ParamIdx, invo, from),
+    !ActualReturn(_, invo, ret),
+    VarContext(ret, retCtx),
+    fromCtx = [invo1,invo2],
+    toCtx = [invo2,invo3],
+    Invoke(invo1,_,_),
+    Invoke(invo2,_,_).
+
+FLowVarTransformation("",fromCtx,line,from,fromCtx,"Instr LocalMeth Var Param",meth,ParamIdx,0):-
+    InterProcAssign(to, toCtx, from, fromCtx,line),
+    InvokeLineno(invo,line),
+    Invoke(invo,meth,_),
+    ActualKeyParam(_, invo, from),
+    FormalParam(ParamIdx,meth,from),
+    !ActualReturn(_, invo, ret),
+    VarContext(ret, retCtx),
+    fromCtx = [invo1,invo2],
+    toCtx = [invo2,invo3],
+    Invoke(invo1,_,_),
+    Invoke(invo2,_,_).
+
+FLowVarTransformation(ret,retCtx,line,from,fromCtx,"Instr LocalMeth Var Param",meth,ParamIdx,ReturnIdx):-
+    CallGraphEdge(invo, _, meth, _),
+    LocalMethod(meth,_,_,_),
+    (TrainingData(meth, _,_);TestData(meth, _,_);ValData(meth, _,_);ScoredData(meth,_,_)),
+    InvokeLineno(invo,line),
+    ActualParam(ParamIdx, invo, from),
+    ActualReturn(ReturnIdx, invo, ret),
+    VarContext(ret, retCtx),
+    VarContext(from, fromCtx),
+    fromCtx=retCtx.
+
+//[Not TODO] add case where no param exist: There is no need to do it since we only represent a dependdencies: if there is a param passing to and from the method
+
+FLowVarTransformation(ret,retCtx,line,"",retCtx,"Instr LocalMeth Var Param",meth,0,ReturnIdx):-
+    CallGraphEdge(invo, _, meth, _),
+    (LocalMethod(meth,_,_,_);LocalClass(meth,_,_)),
+    InvokeLineno(invo,line),
+    !ActualParam(_, invo, _),
+    ActualReturn(ReturnIdx, invo, ret),
+    VarContext(ret, retCtx),
+    !InsensitiveContext(retCtx).
+
+
+
+////
+
+
+// inner-procedural flows (Rule 4, 5 and 17)
+
+
+
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","4a","AssignVar",line) :-
+	AssignVar(to, from,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","4b","AssignBinOp Left",line) :-
+	AssignBinOp(to, from, _, _,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","4c","AssignBinOp Right",line) :-
+	AssignBinOp(to, _, _, from,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","4d","LoadIndex Base",line) :-
+	LoadIndex(to, from, _,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","4e","StoreIndex Index",line) :- // = ["",var]
+	StoreIndex(to, _, from,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","4f","LoadField Object",line) :-
+	LoadField(to, from, _,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","4h","LoadSlice Base",line) :-
+	LoadSlice(to, from, _, _, _,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","4j","StoreIndexSSA Value",line) :-
+	StoreIndexSSA(to, _, _, from,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","4m","StoreIndexSSA Base",line) :-
+	StoreIndexSSA(to, from, _, _,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx. 
+
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","4k","StoreFieldSSA Value",line) :-
+	StoreFieldSSA(to, _, _, from,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","4n","StoreFieldSSA Base",line) :-
+	StoreFieldSSA(to, from, _, _,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","4l","StoreSliceSSA Value",line) :-
+	StoreSliceSSA(to, _, _, _, _, from,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","4o","StoreSliceSSA Base",line) :-
+	StoreSliceSSA(to, from, _, _, _, _,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+
+FlowFromEdge(to, toCtx, from, fromCtx, "normal","5","AssignGlobal",line),   //(5)
+FlowFromEdge(to, toCtx, from, fromCtx, "equiv","5","AssignGlobal",line) :-
+	AssignGlobal(to, from,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _).
+
+
+
+
+
+
+
+
+
+
+
+
+FlowFromEdge(to, toCtx, from, fromCtx, "data","17a","AssignBinOp Left",line) :-
+	AssignBinOp(to, from, _, _,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+
+
+FlowFromEdge(to, toCtx, from, fromCtx, "data","17b","AssignBinOp Right",line) :-
+	AssignBinOp(to, _, _, from,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+    
+    
+
+FlowFromEdge(to, toCtx, from, fromCtx, "data","17c","LoadIndex Base",line) :-
+	LoadIndex(to, from, _,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+ 
+ 
+FlowFromEdge(to, toCtx, from, fromCtx, "data","17d","StoreIndex Value",line) :-
+	StoreIndex(to, _, from,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+
+ 
+FlowFromEdge(to, toCtx, from, fromCtx, "data","17e","LoadField Object",line) :-
+	LoadField(to, from, _,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+    
+    
+FlowFromEdge(to, toCtx, from, fromCtx, "data","17g","LoadSlice Base",line) :-
+	LoadSlice(to, from, _, _, _,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+
+
+
+ 
+FlowFromEdge(to, toCtx, from, fromCtx, "data","17i","StoreIndexSSA Value",line) :-
+	StoreIndexSSA(to, _, _, from,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+    
+FlowFromEdge(to, toCtx, from, fromCtx, "data","17j","StoreFieldSSA Value",line) :-
+	StoreFieldSSA(to, _, _, from,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+ 
+
+FlowFromEdge(to, toCtx, from, fromCtx, "data","17k","StoreSliceSSA Value",line) :-
+	StoreSliceSSA(to, _, _, _, _, from,line),
+	VarPointsTo(to, toCtx, _, _),
+	VarPointsTo(from, fromCtx, _, _),
+	toCtx = fromCtx.
+
+
+
+// Inner-proc our graph edges rules
+
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr AssignGlobal Var","",0,0):-
+    AssignGlobal(to, from,line),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    !InsensitiveContext(fromCtx),
+    !InsensitiveContext(toCtx).
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr LoadIndex Var Base","transformation",0,0):-
+    LoadIndex(to, from, _,line),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).
+FLowVarTransformation(to,toCtx,line,i,fromCtx,"Instr LoadIndex Var Index","transformation",1,0):-
+    LoadIndex(to, _, i,line),
+    i!="slice_placeholder",
+    VarContext(to, toCtx),
+    VarContext(i, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).
+
+FLowVarTransformation(to,toCtx,line,index_value,indexCtx,"Instr LoadExtSlice Var Index","transformation",dimension,0):-
+    LoadIndex(to, _, i,line),
+    i="slice_placeholder",
+    LoadSliceMultiDim(to, _, _,index_value,dimension,line),
+    VarContext(to, toCtx),
+    VarContext(index_value, indexCtx),
+    toCtx= indexCtx,
+    !InsensitiveContext(indexCtx).  
+    
+
+//When all assigned values are not variables, we still represent tha assignment node
+FLowVarTransformation(to,toCtx,line,"",toCtx,"Instr StoreIndex","transformation",0,0):-
+    AssignVar(to, iterable,line),
+    VarContext(to, toCtx),
+    !StoreIndex(to, _, _,line),
+    match("[$](list|tuple|set|dict)[0-9]*", iterable),
+    !InsensitiveContext(toCtx).
+
+
+FLowVarTransformation(to,toCtx,line,value,fromCtx,"Instr StoreFieldSSA Var Value","transformation",2,0):-
+    StoreFieldSSA(to, _, _, value,line),
+    VarContext(to, toCtx),
+    VarContext(value, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).
+
+// Only capture base and field if base is not an imported entity
+FLowVarTransformation(to,toCtx,line,base,fromCtx,"Instr StoreFieldSSA Var Base","transformation",0,0),
+FLowVarTransformation(to,toCtx,line,fld,fromCtx,"Instr StoreFieldSSA field","transformation",1,0):-
+    StoreFieldSSA(to, base, fld, value,line),
+    VarContext(to, toCtx),
+    VarContext(base, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).
+
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr StoreIndexSSA Var Base","transformation",0,0):-
+    StoreIndexSSA(to, from, _, _,line),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr StoreIndexSSA Var Value","transformation",2,0):-
+    StoreIndexSSA(to, _, _, from,line),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).
+
+FLowVarTransformation(to,toCtx,line,i,fromCtx,"Instr StoreIndexSSA Var Index","transformation",1,0):-
+    StoreIndexSSA(to, _, i, _,line),
+    VarContext(to, toCtx),
+    VarContext(i, fromCtx),
+    i!="slice_placeholder",
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).
+
+FLowVarTransformation(to,toCtx,line,index_value,fromCtx,"Instr StoreExtSlice Var Index","transformation",dimension,0)
+:-
+    StoreIndexSSA(to, _, i, _,line),
+    i="slice_placeholder",
+    StoreSliceMultiDim(to, _, _,index_value,dimension,line),
+    VarContext(to, toCtx),
+    VarContext(index, indexCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).  
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr StoreSliceSSA Var Base","transformation",0,0):-
+    StoreSliceSSA(to, from, _, _, _, _,line),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx). 
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr StoreSliceSSA Var Value","transformation",0,4):-
+    StoreSliceSSA(to, _, _, _, _, from,line),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).
+
+FLowVarTransformation(to,toCtx,line,strt,fromCtx,"Instr StoreSliceSSA Var Start","transformation",1,0):- 
+    StoreSliceSSA(to, _, strt, _, _, _,line),
+    VarContext(to, toCtx),
+    VarContext(strt, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).  
+
+FLowVarTransformation(to,toCtx,line,end,fromCtx,"Instr StoreSliceSSA Var End","transformation",2,0):-
+    StoreSliceSSA(to, _,_ , end, _, _,line),
+    VarContext(to, toCtx),
+    VarContext(end, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx). 
+
+FLowVarTransformation(to,toCtx,line,step,fromCtx,"Instr StoreSliceSSA Var Step","transformation",3,0):-
+    StoreSliceSSA(to, _,_ , _, step, from,line),
+    VarContext(to, toCtx),
+    VarContext(step, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).  
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx, cat(op," Instr Var Left"),"transformation",0,0):-
+    AssignBinOp(to, from, op, _,line),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).  
+
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,cat(op," Instr Var"),"transformation",0,0):-
+    AssignUnaryOp(to, op, from, line),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).  
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,cat(op," Instr Var Right"),"transformation",1,0):-
+    AssignBinOp(to, _, op, from,line),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr StoreIndex Index Value","transformation",0,0):-
+    StoreIndex(to, from, _,line),
+    AssignVar(to, iterable,line),
+    match("[$](dict)[0-9]*", iterable),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx). 
+
+
+FLowVarStoreIndex(to,toCtx,line,from,fromCtx,"Instr StoreIndex Var Value","transformation",index,"0"):-
+    StoreIndex(to, index, from,line),
+    AssignVar(to, iterable,line),
+    match("[$](list|tuple|set)[0-9]*", iterable),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx). 
+
+FLowVarTransformation(to,toCtx,line,fld,fromCtx,"Instr LoadField Field","transformation",1,0),
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr LoadField Var Base","transformation",0,0):-
+    LoadField(to, from, fld,line),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).
+
+
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr LoadSlice Var Base","transformation",0,0):-
+    LoadSlice(to, from, _, _, _,line),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx). 
+
+///////
+
+
+
+
+// other known equivalent flows
+
+
+FlowFromEdge(to, toCtx, from, fromCtx, "equiv","10a","StoreIndexSSA Base",line) :-
+    FlowFromEdge(to, toCtx, from, fromCtx, "normal", _, _,_),
+    StoreIndexSSA(to, from, _, _,line).
+
+
+
+FlowFromEdge(to, toCtx, from, fromCtx, "equiv","10b","StoreFieldSSA Base",line) :-
+    FlowFromEdge(to, toCtx, from, fromCtx, "normal", _, _,_),
+    StoreFieldSSA(to, from, _, _,line).
+  
+
+FlowFromEdge(to, toCtx, from, fromCtx, "equiv","10c","StoreSliceSSA Base",line) :-
+    FlowFromEdge(to, toCtx, from, fromCtx, "normal", _, _,_),
+    StoreSliceSSA(to, from, _, _, _, _,line).
+    
+FlowFromEdge(to, toCtx, from, fromCtx, "equiv","10c","InterProcAssign",line) :-
+    FlowFromEdge(to, toCtx, from, fromCtx, "normal", _, _,_),
+    InterProcAssign(to, _, from, _,line).  
+
+FlowFromEdge(to, toCtx, from, fromCtx, "equiv","10e","AssignVar",line) :-
+    FlowFromEdge(to, toCtx, from, fromCtx, "normal", _, _,_),
+    AssignVar(to, from,line).
+
+
+
+FlowFromEdge(to, toCtx, from, fromCtx, "equiv","11","LoadField Base",line) :-  //(11)
+    FlowFromEdge(to, toCtx, from, fromCtx, "normal", _, _,_),
+    LoadField(to, from, _,line).
+
+
+
+
+FlowFromEdge(to, toCtx, from, fromCtx, "equiv","12","DataFrameEquivIndexing",line) :- //(12) 
+    FlowFromEdge(to, toCtx, from, fromCtx, "normal", _,_,_),
+    LoadIndex(to, from, idx,line),
+    IsDataFrameEquivIndexing(idx).
+
+// Equiv flows graph edges rules
+
+
+
+///////
+
+
+
+// in-place updates will trigger flow to aliases
+
+FlowFromEdge(from, fromCtx, to, toCtx,  "normal","6a","StoreIndexSSA new_Base to alias",line),
+FlowFromEdge(from, fromCtx, to, toCtx,  "data","6a","StoreIndexSSA new_Base to alias",line) :-
+    StoreIndexSSA(to, mid, _, _,line),
+    VarPointsTo(to, toCtx, value, hctx),
+    VarPointsTo(mid, midCtx, value, hctx),
+    Alias(to, toCtx, from, fromCtx),
+    toCtx = midCtx.
+
+FlowFromEdge(from, fromCtx, to, toCtx,  "normal","6a","StoreFieldSSA new_Base to alias",line),
+FlowFromEdge(from, fromCtx, to, toCtx,  "data","6b","StoreFieldSSA new_Base to alias",line) :-
+    StoreFieldSSA(to, mid, attr, _,line),
+    VarPointsTo(to, toCtx, value, hctx),
+    VarPointsTo(mid, midCtx, value, hctx),
+    Alias(to, toCtx, from, fromCtx),
+    toCtx = midCtx.
+ 
+ 
+
+FlowFromEdge(from, fromCtx, to, toCtx,  "normal","6c","StoreSliceSSA new_Base to alias",line),
+FlowFromEdge(from, fromCtx, to, toCtx,  "data","6c","StoreSliceSSA new_Base to alias",line) :-
+    StoreSliceSSA(to, mid, _, _, _, _,line),
+    VarPointsTo(to, toCtx, value, hctx),
+    VarPointsTo(mid, midCtx, value, hctx),
+    Alias(to, toCtx, from, fromCtx),
+    toCtx = midCtx.   
+
+
+
+// in-place flows graph edges rules
+
+
+
+///////
+
+FLowVarTransformation(Id,toCtx,start,test,toCtx,"Instr cf Var","transformation",0,0):-
+	FLowVarTransformation(test,toCtx,_,_,_,_,_,_,_),
+	(For(Id,start,_,test);While(Id,start,_,test);If(Id,start,_,test)),
+    !InsensitiveContext(toCtx).
+
+FLowVarTransformation(ElseId,toCtx,start2,IfId,toCtx,"Instr cf Var","transformation",0,0):-
+	FLowVarTransformation(IfId,toCtx,start,_,_,_,_,_,_),
+	If(IfId,start,_,_),
+	OrElse(ElseId,start2,end),
+    Id1=substr(ElseId, 5, strlen(ElseId)),
+    Id2=substr(IfId, 3, strlen(IfId)),
+	Id1=Id2,
+    !InsensitiveContext(toCtx).
+
+FLowVarTransformation(to,toCtx,instr,Id,fromCtx,"Instr cf Var","transformation",0,0) :-
+	(For(Id,start,end,_);While(Id,start,end,_);If(Id,start,end,_);OrElse(Id,start,end)),
+	FLowVarTransformation(to,toCtx,instr,from,fromCtx,_,_,_,_),
+	instr>start,
+	instr<=end,
+    !InsensitiveContext(toCtx).
+
+
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr NonLocalMethod Var Param",meth,c+1,ReturnIdx):-
+    CallGraphEdge(invo, _, meth, _),
+    InvokeLineno(invo,line),
+    ActualKeyParam(_, invo, from),
+    c = count : { ActualParam(_,invo,_)},
+    ActualReturn(ReturnIdx, invo, to),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    !(LocalMethod(meth,_,_,_);LocalClass(meth,_,_)),
+    toCtx = fromCtx,
+   !InsensitiveContext(toCtx).
+
+
+
+    
+    
+FLowVarTransformation("",fromCtx,line,from,fromCtx,"Instr NonLocalMethod Var Param",meth,c+1,0):-
+    CallGraphEdge(invo, _, meth, _),
+    InvokeLineno(invo,line),
+    ActualKeyParam(_, invo, from),
+    c = count : { ActualParam(_,invo,_)},
+    !ActualReturn(_, invo, _),
+    VarContext(from, fromCtx),
+    !(LocalMethod(meth,_,_,_);LocalClass(meth,_,_)),
+    !InsensitiveContext(fromCtx).
+
+FLowVarTransformation(to,toCtx,line,from,toCtx,"Instr NonLocalMethod Var Param",meth,ParamIdx,ReturnIdx):-
+    CallGraphEdge(invo, _, meth, _),
+    InvokeLineno(invo,line),
+    ActualParam(ParamIdx, invo, from),
+    ActualReturn(ReturnIdx, invo, to),
+    VarContext(to, toCtx),
+    !(LocalMethod(meth,_,_,_);LocalClass(meth,_,_)),
+    !InsensitiveContext(toCtx).
+
+
+
+FLowVarTransformation(to,toCtx,line,model,toCtx,"Instr NonLocalMethod Var Param",meth,ParamIdx,ReturnIdx):-
+    CallGraphEdge(invo, _, meth, _),
+    InvokeLineno(invo,line),
+    ActualParam(ParamIdx, invo, from),
+    ActualReturn(ReturnIdx, invo, to),
+    VarContext(to, toCtx),
+    TorchModelWithData(model,from,invo,_),
+    !(LocalMethod(meth,_,_,_);LocalClass(meth,_,_)),
+    !InsensitiveContext(toCtx).
+
+
+FLowVarTransformation(to,toCtx,line,"",toCtx,"Instr NonLocalMethod Var Param",meth,0,ReturnIdx):-
+    CallGraphEdge(invo, _, meth, _),
+    InvokeLineno(invo,line),
+    !ActualParam(_, invo, _),
+    ActualReturn(ReturnIdx, invo, to),
+    VarContext(to, toCtx),
+    !(LocalMethod(meth,_,_,_);LocalClass(meth,_,_)),
+    !InsensitiveContext(toCtx).
+    
+FLowVarTransformation("",fromCtx,line,from,fromCtx,"Instr NonLocalMethod Var Param",meth,ParamIdx,0):-
+    CallGraphEdge(invo, _, meth, _),
+    InvokeLineno(invo,line),
+    ActualParam(ParamIdx, invo, from),
+    //ParamIdx != 0,
+    !ActualReturn(_, invo, _),
+    VarContext(from, fromCtx),
+    !(LocalMethod(meth,_,_,_);LocalClass(meth,_,_)),
+    !InsensitiveContext(fromCtx).
+    
+
+    
+    
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr _Phi_ Param",meth,ParamIdx,ReturnIdx):-
+    CallGraphEdge(invo, _, meth, _),
+    InvokeLineno(invo,line),
+    ActualParam(ParamIdx, invo, from),
+    ActualReturn(ReturnIdx, invo, to),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    InvokeInjected(invo,meth,_),
+    meth="__phi__",
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).
+
+
+
+FLowVarTransformation(to,toCtx,line,strt,fromCtx,"Instr LoadSlice Var Start","transformation",1,0):-
+    LoadSlice(to, _, strt,_,_,line),
+    VarContext(to, toCtx),
+    VarContext(strt, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).
+
+
+FLowVarTransformation(to,toCtx,line,end,fromCtx,"Instr LoadSlice Var End","transformation",2,0):-
+    LoadSlice(to, _, _,end,_,line),
+    VarContext(to, toCtx),
+    VarContext(end, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx). 
+
+FLowVarTransformation(to,toCtx,line,stp,fromCtx,"Instr LoadSlice Var Step","transformation",3,0):-
+    LoadSlice(to, _, _,_,stp,line),
+    VarContext(to, toCtx),
+    VarContext(stp, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).
+
+
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr AssignVar Var","transformation",0,0) :-
+    AssignVar(to, from,line),
+    (
+    (InvokeLineno(invo,line),
+    CallGraphEdge(invo,_,meth,_), 
+    !FilteredMethod(meth));
+
+    (!InvokeLineno(_,line))
+    ),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    toCtx = fromCtx,
+    !InsensitiveContext(fromCtx).
+
+//Special built-in method
+FLowVarTransformation(to,toCtx,line,from,fromCtx,"Instr NonLocalMethod Var Param Manual Specs",meth,0,0):-
+    CallGraphEdge(invo, _, meth, _),
+    InvokeLineno(invo,line),
+    ActualParam(0, invo, to),
+    ActualParam(1, invo, from),
+    !ActualReturn(_, invo, _),
+    VarContext(to, toCtx),
+    VarContext(from, fromCtx),
+    !(LocalMethod(meth,_,_,_);LocalClass(meth,_,_)),
+    !InsensitiveContext(toCtx),
+    (match(".*[.](append|extend)", meth);match(".*[.](update|add)", meth);match(".*[.]update", meth);match(".*[.](fillna)", meth)).
+
+    
+
+
+
+
+
+// self-loop
+FlowFromEdge(from, fromCtx, from, fromCtx, "normal","9","self_loop",0),
+FlowFromEdge(from, fromCtx, from, fromCtx, "equiv","9","self_loop",0)  :-
+    VarPointsTo(from, fromCtx, _, _).
+
+FlowFromEdge(to, toCtx, from, fromCtx, "data","16",transformation,line) :-
+    FlowFromEdge(to, toCtx, from, fromCtx, "equiv",_,transformation,line).
+
+// flow path base case
+FlowFrom(to, toCtx, from, fromCtx, tag) :-
+    FlowFromEdge(to, toCtx, from, fromCtx, tag,_,_,_).
+
+// flow path transitive case
+FlowFrom(to, toCtx, from, fromCtx, tag) :-
+    FlowFrom(to, toCtx, mid, midCtx, tag),
+    FlowFromEdge(mid, midCtx, from, fromCtx, tag,_,_,_).
+
+// [deprecated]
+FlowFromExtended(to, toCtx, from, fromCtx, tag) :-
+    FlowFrom(to, toCtx, from, fromCtx, tag).
+
+
+/* -----------------------------
+Training/validation/test data rules
+----------------------------- */
+.decl TrainingDataWithModel(model:Var, train:Var, invo:Invocation, meth:Method, ctx:Context)
+.decl ValOrTestDataWithModel(model:Var, test:Var, invo:Invocation, meth:Method, ctx:Context)
+.decl ScoredDataWithModel(model:Var, test:Var, invo:Invocation, meth:Method, ctx:Context)
+.decl TestDataWithModel(model:Var, test:Var, invo:Invocation, meth:Method, ctx:Context)
+.decl ValDataWithModel(model:Var, val:Var, invo:Invocation, meth:Method, ctx:Context)
+.decl MethodIndexToKey(index:number, keyword:Var, meth:Method)
+
+
+MethodIndexToKey(8, "validation_data", meth) :-
+    Invoke(_, meth, _),
+    match(".*[.](fit)", meth).
+MethodIndexToKey(6, "validation_data", meth) :-
+    Invoke(_, meth, _),
+    match(".*[.](fit_generator)", meth).
+
+ActualParam(fromIdx, invo, from) :-
+    MethodIndexToKey(fromIdx, keyword, meth),
+    ActualKeyParam(keyword, invo, from),
+    Invoke(invo, meth, _).
+
+TrainingDataWithModel(model, train, invo, meth, ctx) :-
+    TrainingData(meth, model_idx, idx),
+    ActualParam(idx, invo, train),
+    CallGraphEdge(invo, ctx, meth, _),
+    !FilteredTrainingMethod(meth),
+    ActualReturn(model_idx, invo, model).
+
+// could be test/validation data; to be determined
+ValOrTestDataWithModel(model, test, invo, meth, ctx) :-
+    TestData(meth, model_idx, idx),
+    ActualParam(idx, invo, test),
+    CallGraphEdge(invo, ctx, meth, _),
+    ActualParam(model_idx, invo, model).
+
+// find test/validation data used to compute scores
+// [Case 1] score functions called upon models
+ScoredDataWithModel(model, test, invo, meth, ctx) :-
+    ValOrTestDataWithModel(model, test, invo, meth, ctx),
+    ScoredData(meth, model_idx, idx),
+    ActualParam(idx, invo, test),
+    ActualParam(model_idx, invo, model).
+// [Case 2] prediction results are used to compute scores
+ScoredDataWithModel(model, test, invo, meth, ctx1) :-
+    ValOrTestDataWithModel(model, test, invo, meth, ctx1),
+    ActualReturn(ret_idx, invo, ret),
+    ret_idx = 0,
+    FlowFromExtended(res, ctx2, ret, ctx1, _),
+    ScoredResult(meth2, res_idx),
+    CallGraphEdge(invo2, ctx2, meth2, _),
+    CallGraphEdge(invo, ctx1, meth, _),
+    ActualParam(res_idx, invo2, res).
+
+// validation data rules
+// [Case 1] Specified method arguments that are used for validation 
+ValDataWithModel(model, val, invo, meth, ctx) :-
+    ValData(meth, model_idx, idx),
+    ActualParam(idx, invo, val),
+    CallGraphEdge(invo, ctx, meth, _),
+    ActualParam(model_idx, invo, model).
+
+ValDataWithModel(model, val, invo, meth, ctx) :-
+    ValData(meth, model_idx, idx),
+    MethodIndexToKey(idx, keyword, meth),
+    ActualKeyParam(keyword, invo, tup),
+    keyword = "validation_data",
+    StoreIndex(tup, "0", val,_),
+    CallGraphEdge(invo, ctx, meth, _),
+    ActualParam(model_idx, invo, model).
+
+ValDataWithModel(model, val, invo, meth, ctx) :-
+    ValOrTestDataWithModel(model, val, invo, meth, ctx),
+    !FlowFromExtended(val, ctx, loop_var, _, _),
+    InvokeInLoop(invo, loop_var).
+
+
+// all remaining data is treated as test data
+TestDataWithModel(model, test, invo, meth, ctx) :-
+    ValOrTestDataWithModel(model, test, invo, meth, ctx),
+    !ValDataWithModel(model, test, invo, meth, ctx).
+
+// extra cases for modeling pytorch
+.decl TorchModelWithData(model:Var, train:Var, invo:Invocation, meth:Method)
+TorchModelWithData(model, data, invo, meth) :-
+    Invoke(invo, meth, _),
+    match(".*[.](forward)", meth),
+    ActualParam(0, invo, model),
+    ActualParam(1, invo, data).
+
+TorchModelWithData(model, data, invo, meth) :-
+    Invoke(invo, meth, _),
+    model = as(meth, Var),
+    VarType(model, subtype),
+    SubType(subtype, "Module"),
+    ActualParam(1, invo, data).
+
+TrainingDataWithModel(model, data, invo, meth, ctx) :-
+    TorchModelWithData(model, data, invo, meth),
+    FlowFromExtended(loss, ctx2, data, ctx, _),
+    CallGraphEdge(invo2, ctx2, meth2, _),
+    match(".*[.](backward)", meth2),
+    ActualParam(0, invo2, loss).
+
+ValOrTestDataWithModel(model, data, invo, meth, ctx) :-
+    TorchModelWithData(model, data, invo, meth),
+    CallGraphEdge(invo, ctx, meth, _),
+    !TrainingDataWithModel(model, data, invo, meth, ctx).
+
+// Test model should be paired with nearest training model
+.decl ModelPair(testModel:Var, ctx1:Context, trainModel:Var, ctx2:Context)
+.decl ModelPairCandidate(testModel:Var, ctx1:Context, trainModel:Var, ctx2:Context)
+.decl TelemetryModelPairCandidate(trainModel:Var, line2:number,meth2:symbol,train:symbol ,ctx2:Context, testModel:Var,line1:number,meth1:symbol,test:symbol, ctx1:Context)
+.decl Telemetry_ModelPair(testModel:Var, test:Var, invo:Invocation, line2: number ,meth:Method, ctx1:Context, trainModel:Var, train:Var, invo2:Invocation, line1:number,  meth2:Method, ctx2:Context)
+ModelPairCandidate(testModel, ctx1, trainModel, ctx2) :-
+    ValOrTestDataWithModel(testModel, _, invo1, _, ctx1),
+    TrainingDataWithModel(trainModel, _, invo2, _, ctx2),
+    FlowFromExtended(testModel, ctx1, trainModel, ctx2, _),
+    InvokePath(invo1, ctx1, invo2, ctx2).
+    
+
+
+
+TelemetryModelPairCandidate(trainModel, line2,meth2, train ,ctx2, testModel,line1,meth1,test, ctx1) :-
+    (ValOrTestDataWithModel(testModel, test, invo1, meth1, ctx1);ValDataWithModel(testModel, test, invo1, meth1, ctx1)),
+    TrainingDataWithModel(trainModel, train, invo2, meth2, ctx2),
+    InvokeLineno(invo1,line1),
+    InvokeLineno(invo2,line2),
+    FlowFromExtended(testModel, ctx1, trainModel, ctx2, _),
+    InvokePath(invo1, ctx1, invo2, ctx2).
+    
+
+    
+    
+    
+
+Telemetry_ModelPair(trainModel, train, invo2, line2 , meth2, ctx2, testModel, test, invo1, line1 , meth1, ctx1),
+ModelPair(testModel, ctx1, trainModel, ctx2) :-
+    ModelPairCandidate(testModel, ctx1, trainModel, ctx2),
+    ValOrTestDataWithModel(testModel, test, invo1, meth1, ctx1),
+    TrainingDataWithModel(trainModel, train, invo2, meth2, ctx2),
+    InvokeLineno(invo1,line1),
+    InvokeLineno(invo2,line2),
+    c2 = count : { ModelPairCandidate(testModel, ctx1, trainModel2, ctx3), TrainingDataWithModel(trainModel2, _, invo3, _, ctx3), InvokePath(invo3, ctx3, invo2, ctx2), trainModel2 != trainModel},
+    c2 = 0.
+
+Telemetry_ModelPair(trainModel, train, invo2, line2 , meth2, ctx2, testModel, test, invo1, line1 , meth1, ctx1),
+ModelPair(testModel, ctx1, trainModel, ctx2) :-
+    (ValOrTestDataWithModel(testModel, test, invo1, meth1, ctx1);ValDataWithModel(testModel, test, invo1, meth1, ctx1)),
+    TrainingDataWithModel(trainModel, train, invo2, meth2, ctx2),
+    InvokeLineno(invo1,line1),
+    InvokeLineno(invo2,line2),
+    invo1 = invo2,
+    FlowFromExtended(trainModel, ctx1, testModel, ctx1, _).
+
+
+//.output VarEquals
+.output CallGraphEdge
+.output Alias
+.output TorchModelWithData
+.output Telemetry_ModelPair
+.output FLowVarTransformation
+.output InvokeInjected
+.output FLowVarStoreIndex
+.output InterProcAssign
+.output TrainingDataWithModel
+.output ValOrTestDataWithModel
+.output ValDataWithModel
+.output ValData
+.output TestData
+.output ModelPairCandidate
+.output FlowFromExtended

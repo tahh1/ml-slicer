@@ -1,0 +1,55 @@
+# =========================
+# Python runtime artifacts
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# =========================
+# Packaging / build
+# =========================
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# =========================
+# Virtual environments
+# =========================
+.venv/
+venv/
+env/
+
+# =========================
+# Testing / tooling
+# =========================
+.pytest_cache/
+.mypy_cache/
+.coverage
+
+# =========================
+# Editor / IDE
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Project-generated outputs
+# =========================
+_snippets/
+*.bin
+*.csv
+*.fact
+*.log
+
+# =========================
+# Temporary files
+# =========================
+*.tmp
+*.swp
