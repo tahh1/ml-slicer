@@ -141,8 +141,8 @@ def read_index_or_empty(df,index):
     
 
 def match_invo(label,injected_invos):
-    numbers = re.findall("\d+", label)
-    strings = re.split("\d+",label)
+    numbers = re.findall(r"\d+", label)
+    strings = re.split(r"\d+",label)
     new_numbers = []
     for number in numbers:
         shift = sum(1 for el in injected_invos if el < int(number))
@@ -350,7 +350,7 @@ def build_subgraphs(fact_path,ir_path,input_path):
         G.nodes[node_id]["labels"] = label
 
     #Building the per-TTI subgraphs
-    injected_invos = list(map(lambda x : int(re.search("\d+", x).group()), df_injected["Invocation"])) if df_injected.empty == False else []
+    injected_invos = list(map(lambda x : int(re.search(r"\d+", x).group()), df_injected["Invocation"])) if df_injected.empty == False else []
     missing_pairs = 0
     for index,row in df_telemetry_model_pair.iterrows():
         original=row['TrainInvo']+"_"+row['TestInvo']+"_"+row['TrainCtx']+"_"+row['TestCtx']

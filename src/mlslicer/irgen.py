@@ -296,47 +296,6 @@ class CodeTransformer(ast.NodeTransformer):
                         # Case: df.fillna(...) — model side effect
                         nodes, new_base = self.visitNameOnly(obj)
                         return nodes + [ast.Assign([new_base], call)]
-        # if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute):
-        #     if call.func.attr in ["fillna", "replace"]:
-        #         obj = call.func.value  # _var26 or df_train
-        #         value_expr = call.args[0] if call.args else ast.Constant(value="UNKNOWN")
-
-        #         if isinstance(obj, ast.Name):
-        #             var_id = obj.id
-
-        #             if var_id in self.subscript_sources:
-        #                 # Case: _var26 = df_train["col"]; _var26.fillna(...)
-        #                 base, _ = self.subscript_sources[var_id]
-        #                 # print(var_id,self.subscript_sources)
-
-        #                 # Generate a new version of the original base (e.g., df_train_0)
-        #                 # print("base var", base)
-        #                 #new_base_var = self.scopeManager.getName(base, assigned=True)
-        #                 #nodes, new_base_node = self.visit_Name(ast.Name(id=base), assigned=True)
-        #                 #nodes1, new_call = self.visitNameOnly(call)
-        #                 #print("new base var",new_base_var)
-        #                 nodes0, new_base_node = self.visit_Name(ast.Name(id=base), assigned=True)
-        #                 nodes1, new_call = self.visitNameOnly(call)
-        #                 return nodes0 + nodes1 + [
-        #                 ast.Assign([new_base_node], new_call)
-        #                 ]
-        #                 # return  ast.Assign([new_base_node], new_call)
-
-        #                 # Visit the call to handle any nested variables inside the call
-        #                 #nodes1, new_call = self.visitNameOnly(call)
-
-        #                 # Return a direct assignment: df_train_0 = var26.fillna(mean_value)
-        #                 # return nodes1 + [
-        #                 #     ast.Assign(
-        #                 #         targets=[ast.Name(id=new_base_var, ctx=ast.Store())],
-        #                 #         value=new_call
-        #                 #     )
-        #                 # ]
-
-        #             else:
-        #                 # Case: df.fillna(...) — model side effect
-        #                 nodes, new_base = self.visitNameOnly(obj)
-        #                 return nodes + [ast.Assign([new_base], call)]
         if type(call.func) == ast.Attribute and call.func.attr in ["fit", "fit_generator"]:
             if type(call_saved.func) == ast.Attribute and type(call_saved.func.value) == ast.Name:
                 src_name = call_saved.func.value
@@ -349,66 +308,6 @@ class CodeTransformer(ast.NodeTransformer):
                 return nodes + [ast.Assign([new_base], call)]
         return []
                 
-
-
-
-    # def handle_call_updates(self, call, call_saved, assigned_var=None):
-    #     if isinstance(call.func, ast.Attribute):
-    #         method_name = call.func.attr
-
-    #         # ✅ Case 1: fit() or fit_generator()
-    #         if method_name in ["fit", "fit_generator"]:
-    #             if isinstance(call_saved.func, ast.Attribute) and isinstance(call_saved.func.value, ast.Name):
-    #                 src_name = call_saved.func.value
-    #             else:
-    #                 src_name = call.func.value
-
-    #             nodes, new_base = self.visit_Name(src_name, assigned=True)
-    #             if assigned_var:
-    #                 return nodes + [ast.Assign([new_base], assigned_var)]
-    #             else:
-    #                 return nodes + [ast.Assign([new_base], call)]
-
-    #                     # ✅ Case 2: fillna or replace called in-place (no assigned_var)
-    #         elif method_name in ["fillna", "replace"]:
-    #             if assigned_var is None:
-    #                 df_slice_var = astor.to_source(call.func.value).strip() # "_var26"
-    #                 print(df_slice_var)
-    #                 print(self.subscript_sources)
-    #                 if df_slice_var in self.subscript_sources:
-    #                     base_name, field_name = self.subscript_sources[df_slice_var]
-
-    #                     # Create: df_train_0 = set_field_wrapper(df_train, _var25, _var26)
-    #                     wrapper_call = ast.Call(
-    #                         func=ast.Name(id="set_field_wrapper", ctx=ast.Load()),
-    #                         args=[
-    #                             ast.Name(id=base_name, ctx=ast.Load()),    # df_train
-    #                             ast.Name(id=field_name, ctx=ast.Load()),   # _var25
-    #                             ast.Name(id=df_slice_var, ctx=ast.Load()), # _var26
-    #                         ],
-    #                         keywords=[]
-    #                     )
-
-    #                     new_base_name = self.get_fresh_var(base_name)
-    #                     assign_stmt = ast.Assign(
-    #                         targets=[ast.Name(id=new_base_name, ctx=ast.Store())],
-    #                         value=wrapper_call
-    #                     )
-
-    #                     return [assign_stmt]
-
-    #             # Case 2c: X.fillna(...) with no return (simple inplace call)
-    #             else:
-    #                 nodes, new_base = self.visitNameOnly(base_expr)
-    #                 return nodes + [ast.Assign([new_base], call)]
-
-    #     return []
-
-
-
-
-
-
 
 
 
