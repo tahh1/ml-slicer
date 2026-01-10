@@ -1,0 +1,6 @@
+recursive-include mlslicer/tools/pyright/packages/pyright *
+recursive-include mlslicer/tools/pyright/packages/pyright-internal *
+
+recursive-include mlslicer/tools/pyright *.js
+recursive-include mlslicer/tools/pyright *.json
+recursive-include mlslicer/tools/pyright *.ts
